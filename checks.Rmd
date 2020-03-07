@@ -1,0 +1,254 @@
+---
+output: blastula::blastula_email
+---
+
+<style> 
+
+body{
+  font-family: Arial;
+  font-size: 14px;
+}
+td{
+  font-family: Arial;
+  font-size: 14px;
+}
+code{
+  font-family: Arial;
+  font-size: 14px;
+}
+h1{
+color: #8B008B;
+font-size: 30px;
+font-family: Arial;
+}
+
+h2{
+color: #ba8192;
+font-size: 24px;
+font-family: Arial;
+margin-bottom: 0px;
+}
+
+h3{
+color: #ba8192;
+font-size: 20px;
+font-family: Arial;
+margin-bottom: 0px;
+}
+
+h4{
+color: #77777A;
+font-size: 12px;
+font-family: Arial;
+font-weight: 50
+line-height: 1px;
+margin-top: 0px;
+}
+
+
+</style>  
+
+
+```{r pressure, echo=FALSE, out.width = '100%'}
+knitr::include_graphics("Capture.PNG")
+```
+
+
+
+
+```{r setup, include=FALSE}
+
+library(kableExtra)
+knitr::opts_chunk$set(echo = TRUE)
+library(blastula)
+library(dplyr)
+library(lubridate)
+library(reader)
+library(emo)
+Sys.setenv(RSTUDIO_PANDOC="/usr/lib/rstudio-server/bin/pandoc")
+
+
+# files for dashboards------------
+files <<- list.files("XXXdatapath/data/1920/")
+checkBSQ <- data.frame(File = as.character(paste0("XXXdatapath/data/1920/",files)),
+                       Survey= "BSQ",
+                       Created= as.Date(as.character(file.info(paste0("XXXdatapath/data/1920/",files))$ctime)),
+                       stringsAsFactors=FALSE)
+files <<- list.files("XXXdatapath/data/1920/")
+checkBSQFM <- data.frame(File = as.character(paste0("XXXdatapath/data/1920/",files)),
+                         Survey= "BSQ FM",
+                         Created= as.Date(as.character(file.info(paste0("XXXdatapath/data/1920/",files))$ctime)),
+                         stringsAsFactors=FALSE)
+check <- rbind(checkBSQ, checkBSQFM)
+files <<- list.files("XXXdatapath/data/1920/")
+checkAPQ <- data.frame(File = as.character(paste0("XXXdatapath/data/1920/",files)),
+                       Survey= "APQ",
+                       Created= as.Date(as.character(file.info(paste0("XXXdatapath/data/1920/",files))$ctime)),
+                       stringsAsFactors=FALSE)
+check <- rbind(check, checkAPQ)
+files <<- list.files("XXXdatapath/data/1920/")
+checkSCDS <- data.frame(File = as.character(paste0("XXXdatapath/data/1920/",files)),
+                        Survey= "SCDS",
+                        Created= as.Date(as.character(file.info(paste0("XXXdatapath/data/1920/",files))$ctime)),
+                        stringsAsFactors=FALSE)
+check <- rbind(check, checkSCDS)
+check$Outdated = as.logical(check$Created<today())
+
+check <- check %>% 
+  mutate(
+    Status = case_when(
+  grepl(x=check$File, pattern = "INCOMPLETE") ~ "\U0002705",
+  Outdated == TRUE ~ "\U000274C",
+  Outdated == FALSE ~ "\U000274E")
+  ) %>% 
+  tidyr::separate(File, into = c("rest", "File"), sep="data/") %>% 
+  select(Status, File, Created, Outdated)
+
+
+# deployment of participation dashboards-------------
+conbsq <- length(readLines("XXXdatapath/run.log"))
+status_bsq <- n.readLines("XXXdatapath/run.log", n=1, skip=conbsq-1)
+conbsqfm <- length(readLines("XXXdatapath/run.log"))
+status_bsqfm <- n.readLines("XXXdatapath/run.log", n=1, skip=conbsqfm-1)
+conapq <- length(readLines("XXXdatapath/run.log"))
+status_apq <- n.readLines("XXXdatapath/run.log", n=1, skip=conapq-1)
+conscds <- length(readLines("XXXdatapath/run.log"))
+status_scds <- n.readLines("XXXdatapath/run.log", n=1, skip=conscds-1)
+
+#sql server api pull-----------
+
+consql <- length(readLines("XXXdatapath/bsq_sql.log"))
+status_sql <- n.readLines("XXXdatapath/bsq_sql.log", n=1, skip=consql-1)
+status_sql <-  !grepl(status_sql, pattern = "halted")
+
+
+#removing old scds reports for api-----------
+conscdsremove <- length(readLines("XXXdatapath/remove_old_reports.log"))
+status_scdsremove <- n.readLines("XXXdatapath/remove_old_reports.log", n=1, skip=conscdsremove-1)
+status_scdsremove <- status_scdsremove %>% 
+  grep(.,pattern = "Halted", invert = TRUE) %>% 
+  as.logical()
+
+
+#resubmissions -------------
+conresub <- length(readLines("XXXdatapath/resubmission.log"))
+status_resub <- n.readLines("XXXdatapath/resubmission.log", n=1, skip=conresub-1)
+status_resub <- status_resub %>% 
+  grepl(pattern = "environment")
+
+
+#data import for scds cleaning app---------
+ status_scds_import <- lubridate::date(file.info("/XXXdatapath/users.xlsx")$ctime)==lubridate::today()
+
+
+#reports created for scds cleaning api----------
+scds_reports_api <- dir.exists(paste0("XXXdatapath/reports/", lubridate::today()))
+
+#survey_participation_history_toSQL -------------
+consurvey_part_SQL <- length(readLines("XXXdatapath/data_pull.log"))
+status_survey_part_SQL <- n.readLines("XXXdatapath/data_pull.log", n=1, skip=consurvey_part_SQL-1)
+status_survey_part_SQL <- status_survey_part_SQL %>% 
+  grep(.,pattern = "Halted", invert = TRUE)%>% 
+  as.logical()
+
+#overall status-----------
+status_all <- all(status_survey_part_SQL, status_sql, status_scdsremove, status_resub, status_scds_import, scds_reports_api, !(filter(check, !grepl(x=File, pattern = "LOCKED_INCOMPLETE.csv", fixed = TRUE))$Outdated),
+grepl(x = c(status_apq, status_bsq, status_bsqfm, status_scds), pattern = "success"))
+
+if (status_all=="TRUE") {
+  status_all_emoji <- "\U0002705"
+} else {
+  status_all_emoji <- "\U000274C"
+}
+```
+
+
+#  Current Status of R Projects `r status_all_emoji`
+
+
+## 1. Dashboards deployment
+#### Lorem ipsum dolor sit amet, vel gloriatur definiebas deterruisset ex. Id nam semper vivendum, an eros iudicabit sed. Id esse labitur tacimates cum. 
+
+```{r, echo=FALSE, comment=NA}
+conbsq <- length(readLines("XXXdatapath/run.log"))
+status_bsq <- n.readLines("XXXdatapath/run.log", n=1, skip=conbsq-1)
+conbsqfm <- length(readLines("XXXdatapath/run.log"))
+status_bsqfm <- n.readLines("XXXdatapath/run.log", n=1, skip=conbsqfm-1)
+conapq <- length(readLines("XXXdatapath/run.log"))
+status_apq <- n.readLines("XXXdatapath/run.log", n=1, skip=conapq-1)
+conscds <- length(readLines("XXXdatapath/run.log"))
+status_scds <- n.readLines("XXXdatapath/run.log", n=1, skip=conscds-1)
+
+if(grepl("halted", status_scds)){
+  cat(emo::ji("x")," Dashboard #1 failed to get deployed\n")
+} else {
+  cat(emo::ji("white_check_mark")," Dashboard #1 has been successfully deployed\n")
+}
+if (grepl("halted", status_bsq)) {
+  cat(emo::ji("x")," Dashboard #2 failed to get deployed\n")
+} else {
+  cat(emo::ji("white_check_mark")," Dashboard #2 has been successfully deployed\n")
+}
+if (grepl("halted", status_bsqfm)) {
+  cat(emo::ji("x")," Dashboard #3 failed to get deployed\n")
+} else {
+  cat(emo::ji("white_check_mark")," Dashboard #3 has been successfully deployed\n")
+}
+if (grepl("halted", status_apq)) {
+  cat(emo::ji("x")," Dashboard #4 failed to get deployed\n")
+} else {
+  cat(emo::ji("white_check_mark")," Dashboard #4 has been successfully deployed\n")
+}
+```
+
+
+## 2. Scheduled webscraping
+#### Probatus sententiae definiebas id vim, probo legere ut nam. Has natum torquatos mediocritatem ne, ne quo decore vidisse. Quo tantas quaeque percipit eu, ex omnes detraxit vix. Probo nonumy volumus in vim.
+```{r, echo=FALSE}
+check %>%
+  filter(Outdated==TRUE) %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## 3. API data pull for the SQL server
+
+```{r, echo=FALSE, comment=NA}
+if (status_sql=="TRUE") {
+  cat(emo::ji("white_check_mark")," Data pull has been completed successfully\n")
+} else {
+  cat(emo::ji("x")," Data pull has failed\n")
+}
+```
+
+## 4. Cleaning Program
+### 4.1. Importing data for the cleaning program
+#### Nam no suas simul. Ne mutat blandit tincidunt sea. Ad vim decore dolorum, mei ne accusam imperdiet rationibus. Ius noster aliquam inermis cu. Te eos iisque legimus forensibus, per harum imperdiet efficiendi id, pro veniam possit apeirian ea. Viderer persius aliquid sed et.
+
+```{r, echo=FALSE, comment=NA}
+if (status_scds_import=="TRUE") {
+  cat(emo::ji("white_check_mark")," Data for cleaning app is up-to-date\n")
+} else {
+  cat(emo::ji("x")," Data for cleaning app is outdated\n")
+}
+```
+
+### 4.2. New reports were created for the API
+#### Nam no suas simul. Ne mutat blandit tincidunt sea. Ad vim decore dolorum, mei ne accusam imperdiet rationibus. Ius noster aliquam inermis cu. 
+```{r, echo=FALSE, comment=NA}
+if (scds_reports_api=="TRUE") {
+  cat(emo::ji("white_check_mark")," New reports have been successfully created\n")
+} else {
+  cat(emo::ji("x")," New reports failed to get created\n")
+}
+```
+### 4.3. Removing old reports
+#### Nam no suas simul. Ne mutat blandit tincidunt sea. 
+```{r, echo=FALSE, comment=NA}
+if (status_scdsremove=="TRUE") {
+  cat(emo::ji("white_check_mark")," Old reports have been successfully removed\n")
+} else {
+  cat(emo::ji("x")," Old reports failed to get removed\n")
+}
+```
+

@@ -1,1 +1,3 @@
-# projectchecks
+# Project Checks
+
+This project is developed to keep track of the variety of R projects an organization might have running sumulteniously and can be scheduled to send daily report emails if necessary. The project uses several packages, such as blastula, RMarkdown, lubridate, emo and tidyverse. It tracks the log files and date when files are created to compile indicators displayed in the report. Emojis add visual representation for the report for easy comprehension. You can see an example of a report here: https://OlgaShldrr.github.io/projectchecks/checks.html
